@@ -1,0 +1,322 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PL Code - Global IDE</title>
+    
+    <!-- CodeMirror (The VS Code Editor Engine) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/darcula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
+
+    <!-- Local Python Engine -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    
+    <style>
+        /* PL Code Premium Dark Theme */
+        :root { --bg: #1e1e1e; --sidebar: #252526; --activity: #333333; --accent: #007acc; --text: #cccccc; --gold: #cca700; --error: #f48771; --success: #28a745; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Activity Bar */
+        .activity-bar { width: 50px; background: var(--activity); display: flex; flex-direction: column; align-items: center; padding-top: 15px; z-index: 10; border-right: 1px solid #222; }
+        .activity-icon { font-size: 22px; color: #858585; margin-bottom: 25px; cursor: pointer; transition: 0.2s; }
+        .activity-icon:hover { color: #fff; }
+        .activity-icon.active { color: #ffffff; border-left: 2px solid var(--accent); padding-left: -2px; }
+
+        /* Sidebar */
+        .sidebar { width: 220px; background: var(--sidebar); display: flex; flex-direction: column; border-right: 1px solid #333; transition: transform 0.3s ease; }
+        .sidebar-header { padding: 12px 15px; font-size: 11px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; color: #bbb; display: flex; justify-content: space-between; align-items: center; }
+        .file-list { flex: 1; overflow-y: auto; }
+        .file-item { padding: 8px 10px 8px 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 10px; color: var(--text); border-left: 2px solid transparent; }
+        .file-item:hover { background: #2a2d2e; }
+        .file-item.active { background: #37373d; color: #fff; border-left: 2px solid var(--accent); }
+        .file-item.locked { opacity: 0.6; color: #999; }
+        .brand-footer { padding: 15px; text-align: center; font-size: 10px; color: #666; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-top: 1px solid #333; }
+        .brand-footer span { color: var(--accent); }
+
+        /* Main Editor Area */
+        .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+        .top-bar { background: var(--bg); height: 45px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-right: 15px; }
+        .tabs { display: flex; height: 100%; }
+        .file-tab { background: var(--sidebar); padding: 0 20px; display: flex; align-items: center; font-size: 13px; color: #8a8a8a; border-right: 1px solid #333; border-top: 2px solid transparent; cursor: pointer; }
+        .file-tab.active { background: var(--bg); color: #fff; border-top: 2px solid var(--accent); }
+        
+        .run-controls { display: flex; gap: 12px; align-items: center; }
+        .go-pro-btn { background: rgba(204, 167, 0, 0.1); color: var(--gold); border: 1px solid var(--gold); padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
+        .run-btn { background: var(--accent); color: #fff; border: none; padding: 7px 18px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+        /* Editor Wrapper */
+        .editor-wrapper { flex: 1; display: flex; position: relative; overflow: hidden; background: #2b2b2b; }
+        .CodeMirror { width: 100%; height: 100%; font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5; }
+
+        /* Bottom Panel */
+        .bottom-panel { height: 38%; background: var(--bg); border-top: 1px solid #444; display: flex; flex-direction: column; }
+        .panel-header { display: flex; padding: 0 10px; background: var(--bg); border-bottom: 1px solid #333; }
+        .panel-tab { padding: 10px 20px; font-size: 11px; text-transform: uppercase; font-weight: bold; color: #8a8a8a; cursor: pointer; border-bottom: 2px solid transparent; }
+        .panel-tab.active { color: #fff; border-bottom: 2px solid var(--accent); }
+        .panel-content { flex: 1; overflow: hidden; position: relative; }
+        #console-view { padding: 15px; font-family: 'Consolas', monospace; font-size: 13px; color: #cccccc; white-space: pre-wrap; overflow-y: auto; height: 100%; }
+        #preview-view { display: none; width: 100%; height: 100%; background: #fff; }
+        iframe { width: 100%; height: 100%; border: none; }
+        canvas { display: block; width: 100%; height: 100%; background: #111; }
+
+        /* Interstitial Ad */
+        .interstitial-ad { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: white; backdrop-filter: blur(5px); }
+        .ad-content { width: 90%; max-width: 400px; background: #1a1a1a; border: 1px solid #333; padding: 40px 20px; border-radius: 12px; }
+        .ad-sponsor { color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 10px; }
+        .ad-title { font-size: 22px; color: var(--accent); margin-bottom: 25px; font-weight: 800; }
+        .ad-timer { font-size: 16px; color: #fff; margin-bottom: 25px; font-weight: bold; }
+        .close-ad-btn { background: #fff; color: #000; padding: 12px 30px; border: none; border-radius: 25px; font-weight: 800; font-size: 15px; display: none; cursor: pointer; margin: 0 auto; }
+
+        /* MODAL & PAYWALL DESIGN WITH GOOGLE PAY + SECRET PASSWORD */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(3px); }
+        .modal { background: #252526; border: 1px solid var(--gold); border-radius: 12px; padding: 25px; width: 95%; max-width: 380px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.6); }
+        .modal h2 { color: var(--gold); margin-bottom: 5px; font-size: 24px; font-weight: 900; }
+        .modal p { color: #aaa; font-size: 13px; margin-bottom: 15px; }
+        .modal ul { text-align: left; list-style: none; margin-bottom: 20px; padding: 0 10px; }
+        .modal li { color: #fff; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        
+        /* Modern Global Checkout Button */
+        .checkout-btn { width: 100%; background: #ffffff; color: #000000; padding: 14px; font-weight: 800; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1); margin-bottom: 10px; }
+        .checkout-btn img { height: 18px; }
+        .checkout-btn:active { transform: scale(0.98); background: #e0e0e0; }
+
+        /* Secret Code Section CSS */
+        .secret-container { margin-top: 15px; border-top: 1px solid #3c3c3c; padding-top: 15px; text-align: left; }
+        .secret-label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; margin-bottom: 6px; font-weight: bold; display: flex; justify-content: space-between;}
+        .secret-row { display: flex; gap: 8px; }
+        .secret-input { flex: 1; background: #1e1e1e; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 4px; font-size: 13px; outline: none; }
+        .secret-input:focus { border-color: var(--accent); }
+        .secret-unlock-btn { background: #333; color: #fff; border: 1px solid #555; padding: 0 15px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .secret-unlock-btn:active { background: #444; }
+
+        .cancel-btn { background: transparent; color: #888; border: none; margin-top: 15px; cursor: pointer; font-size: 13px; text-decoration: underline; }
+
+        /* Custom Toast Notification */
+        .toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: var(--success); color: #fff; padding: 14px 24px; border-radius: 30px; font-weight: 800; font-size: 14px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); transition: top 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index: 3000; display: flex; align-items: center; gap: 10px; border: 1px solid #20c997; }
+        .toast.show { top: 25px; }
+
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; height: 100%; z-index: 5; transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); box-shadow: 5px 0 25px rgba(0,0,0,0.5); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">✅ <span id="toast-msg">Success!</span></div>
+
+    <!-- Activity Bar -->
+    <div class="activity-bar">
+        <div class="activity-icon active" onclick="toggleSidebar()">📁</div>
+        <div class="activity-icon">🔍</div>
+        <div class="activity-icon">⚙️</div>
+    </div>
+
+    <!-- Explorer Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span>Explorer</span>
+            <span onclick="toggleSidebar()" style="cursor:pointer; padding: 0 5px;">✕</span>
+        </div>
+        <div class="file-list">
+            <div class="file-item active" onclick="switchFile('python', 'main.py')">🐍 main.py</div>
+            <div class="file-item locked" onclick="switchFile('html', 'index.html')">🌐 index.html 🔒</div>
+            <div class="file-item locked" onclick="switchFile('js-game', 'game.js')">🎮 game.js 🔒</div>
+            <div class="file-item locked" onclick="switchFile('cpp', 'main.cpp')">⚙️ main.cpp 🔒</div>
+            <div class="file-item locked" onclick="switchFile('java', 'App.java')">☕ App.java 🔒</div>
+        </div>
+        <div class="brand-footer"><span>PL Code</span> Lab</div>
+    </div>
+
+    <!-- Main Editor Area -->
+    <div class="main-area">
+        <div class="top-bar">
+            <div class="tabs"><div class="file-tab active" id="current-tab-name">main.py</div></div>
+            <div class="run-controls">
+                <button class="go-pro-btn" id="pro-btn" onclick="openModal()">👑 Go PRO</button>
+                <button class="run-btn" onclick="handleRunClick()">▶ Run</button>
+            </div>
+        </div>
+
+        <div class="editor-wrapper"><textarea id="editor"></textarea></div>
+
+        <div class="bottom-panel">
+            <div class="panel-header">
+                <div class="panel-tab active" id="tab-console" onclick="showPanel('console')">Terminal</div>
+                <div class="panel-tab" id="tab-preview" onclick="showPanel('preview')">App Preview</div>
+            </div>
+            <div class="panel-content">
+                <div id="console-view">PL Code Engine Initialized. Ready.</div>
+                <div id="preview-view">
+                    <iframe id="html-preview" style="display:none;"></iframe>
+                    <canvas id="game-canvas" style="display:none;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interstitial Ad Screen -->
+    <div class="interstitial-ad" id="ad-screen">
+        <div class="ad-content">
+            <div class="ad-sponsor">Sponsored Content</div>
+            <div class="ad-title">AdMob Interstitial Placement</div>
+            <div class="ad-timer" id="ad-timer">Compiling code in 3...</div>
+            <button class="close-ad-btn" id="close-ad-btn" onclick="finishAd()">Skip Ad & Run</button>
+        </div>
+    </div>
+
+    <!-- PAYWALL MODAL WITH GOOGLE PAY & TIME-LOCKED PASSWORD SYSTEM -->
+    <div class="modal-overlay" id="pro-modal">
+        <div class="modal">
+            <h2>👑 PLpro Premium</h2>
+            <p>Access all professional tools globally.</p>
+            <ul>
+                <li>🔓 <b>Unlock All Pro Languages:</b> HTML, JS, C++, Java.</li>
+                <li>🚫 <b>Zero Compilation Ads:</b> Remove "Run" system popups.</li>
+            </ul>
+            
+            <!-- Global Checkout Button -->
+            <button class="checkout-btn" onclick="processGlobalPayment()">
+                 💳 Pay via GPay / Card (₹499 / $10 for 1 Month)
+            </button>
+            
+            <!-- SECRET PASSWORD ACTIVATION FOR YOU -->
+            <div class="secret-container">
+                <div class="secret-label">
+                    <span>Admin Promo Code</span>
+                    <span style="color:#cca700;">(3-Month Pass)</span>
+                </div>
+                <div class="secret-row">
+                    <input type="password" id="secret-passcode" class="secret-input" placeholder="Type password here...">
+                    <button class="secret-unlock-btn" onclick="checkSecretPassword()">Unlock</button>
+                </div>
+            </div>
+
+            <button class="cancel-btn" onclick="closeModal()">Maybe Later</button>
+        </div>
+    </div>
+
+    <script>
+        // --- MASTER SYSTEM CONFIGURATION ---
+        const ADMIN_SECRET_PASSWORD = "ansh#₹99cr07123"; 
+
+        let isPro = false;
+        let currentLang = 'python';
+        let pyodideInstance = null;
+
+        // --- SUBSCRIPTION TIME-LOCK CHECK ON STARTUP ---
+        window.onload = function() {
+            checkSubscription();
+        };
+
+        function checkSubscription() {
+            const expiryStr = localStorage.getItem('plcode_pro_expiry');
+            if (expiryStr) {
+                const expiryTime = parseInt(expiryStr);
+                const currentTime = Date.now();
+                
+                if (currentTime < expiryTime) {
+                    // Subscription is still active
+                    activateProSystem(true); // silent activation
+                    
+                    // Optional: Calculate days remaining for the console
+                    const daysLeft = Math.ceil((expiryTime - currentTime) / (1000 * 60 * 60 * 24));
+                    document.getElementById('console-view').innerText += `\n[PLpro Active: ${daysLeft} days remaining]`;
+                } else {
+                    // Subscription has expired
+                    localStorage.removeItem('plcode_pro_expiry');
+                    showToast("⚠️ Your PLpro subscription has expired.");
+                }
+            }
+        }
+
+        // Custom Toast Notification System
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+        }
+
+        // --- SECRET PASSWORD BYPASS ROUTINE (90 DAYS) ---
+        function checkSecretPassword() {
+            const enteredCode = document.getElementById('secret-passcode').value;
+            
+            if (enteredCode === ADMIN_SECRET_PASSWORD) {
+                // Calculate exactly 90 days from right now in milliseconds
+                const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+                const expirationDate = Date.now() + ninetyDaysMs;
+                
+                // Save it to the phone's local memory
+                localStorage.setItem('plcode_pro_expiry', expirationDate.toString());
+                
+                activateProSystem(false);
+                showToast("🎉 Passcode Verified! 3-Month PLpro Access Activated.");
+            } else {
+                showToast("❌ Invalid secret password. Try again.");
+            }
+        }
+
+        // --- SIMULATED STRIPE/RAZORPAY GLOBAL PAYMENT ROUTINE (30 DAYS) ---
+        function processGlobalPayment() {
+            showToast("Connecting securely to International Payment Network...");
+            
+            setTimeout(() => {
+                // Standard users who pay $10 only get 30 days
+                const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+                const expirationDate = Date.now() + thirtyDaysMs;
+                localStorage.setItem('plcode_pro_expiry', expirationDate.toString());
+                
+                activateProSystem(false);
+                showToast("💰 Payment Confirmed! 1-Month PLpro Access Activated.");
+            }, 2500);
+        }
+
+        // Unified Activation Engine
+        function activateProSystem(silent = false) {
+            isPro = true;
+            document.getElementById('pro-btn').style.display = 'none';
+            document.querySelectorAll('.file-item.locked').forEach(el => {
+                el.classList.remove('locked');
+                el.innerHTML = el.innerHTML.replace(' 🔒', '');
+            });
+            closeModal();
+        }
+
+        // File/Language Configuration Boilerplates
+        const files = {
+            'python': { name: 'main.py', mode: 'python', code: 'print("--- PL Code Python Engine ---")\nprint("Running flawlessly offline.")' },
+            'html': { name: 'index.html', mode: 'xml', code: '<!DOCTYPE html>\n<html>\n<body>\n  <h2 style="color:#007acc; text-align:center; font-family:sans-serif; margin-top:50px;">HTML App Engine Online</h2>\n</body>\n</html>' },
+            'js-game': { name: 'game.js', mode: 'javascript', code: 'const canvas = document.getElementById("game-canvas");\nconst ctx = canvas.getContext("2d");\nfunction draw() {\n  ctx.fillStyle = "#1e1e1e"; ctx.fillRect(0,0,canvas.width,canvas.height);\n  ctx.fillStyle = "#cca700"; ctx.fillRect(50,50,100,100);\n}\ndraw();' },
+            'cpp': { name: 'main.cpp', mode: 'clike', code: '#include <iostream>\nint main() { std::cout << "C++ Complete." << std::endl; return 0; }' },
+            'java': { name: 'App.java', mode: 'clike', code: 'public class App { public static void main(String[] args) { System.out.println("Java Active."); } }' }
+        };
+
+        const editorDOM = document.getElementById('editor');
+        const editor = CodeMirror.fromTextArea(editorDOM, {
+            lineNumbers: true, theme: 'darcula', mode: 'python', indentUnit: 4, matchBrackets: true, lineWrapping: true
+        });
+        editor.setValue(files['python'].code);
+
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+
+        function switchFile(langKey, fileName) {
+            if (langKey !== 'python' && !isPro) { openModal(); return; }
+            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById('current-tab-name').innerText = fileName;
+            currentLang = langKey;
+            editor.setOption('mode', files[langKey].mode);
+            editor.setValue(files[langKey].code);
+            showPanel('console');
+            document.getElementById('console-view').innerText = `[${fileName}] active.`;
+            if(window.innerWidth <= 768
